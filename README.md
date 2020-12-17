@@ -1,4 +1,4 @@
-
+linol专用软件包
 ##### 添加以下插件
 ###### luci-theme-rosy    &nbsp;&nbsp;&nbsp;&nbsp;#主题-rosy
 ###### luci-theme-edge    &nbsp;&nbsp;&nbsp;&nbsp;#主题-edge
