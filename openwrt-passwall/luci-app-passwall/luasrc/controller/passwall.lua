@@ -4,6 +4,7 @@ local appname = "passwall"
 local ucic = luci.model.uci.cursor()
 local http = require "luci.http"
 local util = require "luci.util"
+local i18n = require "luci.i18n"
 local api = require "luci.model.cbi.passwall.api.api"
 local kcptun = require "luci.model.cbi.passwall.api.kcptun"
 local brook = require "luci.model.cbi.passwall.api.brook"
@@ -52,6 +53,7 @@ function index()
 	entry({"admin", "services", appname, "link_clear_temp"}, call("link_clear_temp")).leaf = true
 	entry({"admin", "services", appname, "link_add_node"}, call("link_add_node")).leaf = true
 	entry({"admin", "services", appname, "get_now_use_node"}, call("get_now_use_node")).leaf = true
+	entry({"admin", "services", appname, "get_redir_log"}, call("get_redir_log")).leaf = true
 	entry({"admin", "services", appname, "get_log"}, call("get_log")).leaf = true
 	entry({"admin", "services", appname, "clear_log"}, call("clear_log")).leaf = true
 	entry({"admin", "services", appname, "status"}, call("status")).leaf = true
@@ -133,24 +135,29 @@ end
 
 function get_now_use_node()
 	local e = {}
-	local tcp_node_num = ucic:get(appname, "@global_other[0]", "tcp_node_num") or 1
-	e.tcp = tonumber(tcp_node_num)
-	for i = 1, tcp_node_num, 1 do
-		local data, code, msg = nixio.fs.readfile("/var/etc/passwall/id/TCP_" .. i)
-		if data then
-			e["TCP" .. i] = util.trim(data)
-		end
+	local data, code, msg = nixio.fs.readfile("/var/etc/passwall/id/TCP")
+	if data then
+		e["TCP"] = util.trim(data)
 	end
-	local udp_node_num = ucic:get(appname, "@global_other[0]", "udp_node_num") or 1
-	e.udp = tonumber(udp_node_num)
-	for i = 1, udp_node_num, 1 do
-		local data, code, msg = nixio.fs.readfile("/var/etc/passwall/id/UDP_" .. i)
-		if data then
-			e["UDP" .. i] = util.trim(data)
-		end
+	local data, code, msg = nixio.fs.readfile("/var/etc/passwall/id/UDP")
+	if data then
+		e["UDP"] = util.trim(data)
 	end
 	luci.http.prepare_content("application/json")
 	luci.http.write_json(e)
+end
+
+function get_redir_log()
+	local proto = luci.http.formvalue("proto")
+	proto = proto:upper()
+	local filename = proto
+	if nixio.fs.access("/var/etc/passwall/" .. filename .. ".log") then
+		local content = luci.sys.exec("cat /var/etc/passwall/" .. filename .. ".log")
+		content = content:gsub("\n", "<br />")
+		luci.http.write(content)
+	else
+		luci.http.write(string.format("<script>alert('%s');window.close();</script>", i18n.translate("Not enabled log")))
+	end
 end
 
 function get_log()
@@ -167,19 +174,13 @@ function status()
 	local e = {}
 	e.dns_mode_status = luci.sys.call("netstat -apn | grep ':7913 ' >/dev/null") == 0
 	e.haproxy_status = luci.sys.call(string.format("ps -w | grep -v grep | grep '%s/bin/' | grep haproxy >/dev/null", appname)) == 0
-	local tcp_node_num = ucic:get(appname, "@global_other[0]", "tcp_node_num") or 1
-	for i = 1, tcp_node_num, 1 do
-		e["kcptun_tcp_node%s_status" % i] = luci.sys.call(string.format("ps -w | grep -v grep | grep '%s/bin/kcptun' | grep -i 'tcp_%s' >/dev/null", appname, i)) == 0
-		e["tcp_node%s_status" % i] = luci.sys.call(string.format("ps -w | grep -v -E 'grep|kcptun' | grep '%s/bin/' | grep -i 'TCP_%s' >/dev/null", appname, i)) == 0
-	end
+	e["kcptun_tcp_node_status"] = luci.sys.call(string.format("ps -w | grep -v grep | grep '%s/bin/kcptun' | grep -i 'tcp' >/dev/null", appname)) == 0
+	e["tcp_node_status"] = luci.sys.call(string.format("ps -w | grep -v -E 'grep|kcptun' | grep '%s/bin/' | grep -i 'TCP' >/dev/null", appname)) == 0
 
-	local udp_node_num = ucic:get(appname, "@global_other[0]", "udp_node_num") or 1
-	for i = 1, udp_node_num, 1 do
-		if (ucic:get(appname, "@global[0]", "udp_node" .. i) or "nil") == "tcp" then
-			e["udp_node%s_status" % i] = e["tcp_node%s_status" % i]
-		else
-			e["udp_node%s_status" % i] = luci.sys.call(string.format("ps -w | grep -v grep | grep '%s/bin/' | grep -i 'UDP_%s' >/dev/null", appname, i)) == 0
-		end
+	if (ucic:get(appname, "@global[0]", "udp_node") or "nil") == "tcp" then
+		e["udp_node_status"] = e["tcp_node_status"]
+	else
+		e["udp_node_status"] = luci.sys.call(string.format("ps -w | grep -v grep | grep '%s/bin/' | grep -i 'UDP' >/dev/null", appname)) == 0
 	end
 	luci.http.prepare_content("application/json")
 	luci.http.write_json(e)
@@ -209,7 +210,11 @@ function connect_status()
 	local code = tonumber(luci.sys.exec("echo -n '" .. result .. "' | awk -F ':' '{print $1}'") or "0")
 	if code ~= 0 then
 		local use_time = luci.sys.exec("echo -n '" .. result .. "' | awk -F ':' '{print $2}'")
-		e.use_time = string.format("%.2f", use_time * 1000)
+		if use_time:find("%.") then
+			e.use_time = string.format("%.2f", use_time * 1000)
+		else
+			e.use_time = string.format("%.2f", use_time / 1000)
+		end
 		e.ping_type = "curl"
 	end
 	luci.http.prepare_content("application/json")
@@ -235,9 +240,8 @@ end
 
 function set_node()
 	local protocol = luci.http.formvalue("protocol")
-	local number = luci.http.formvalue("number")
 	local section = luci.http.formvalue("section")
-	ucic:set(appname, "@global[0]", protocol .. "_node" .. number, section)
+	ucic:set(appname, "@global[0]", protocol .. "_node", section)
 	ucic:commit(appname)
 	luci.sys.call("/etc/init.d/passwall restart > /dev/null 2>&1 &")
 	luci.http.redirect(luci.dispatcher.build_url("admin", "services", appname, "log"))
@@ -296,18 +300,14 @@ function check_port()
 	local node_name = ""
 
 	local retstring = "<br />"
-	-- retstring = retstring .. "<font color='red'>暂时不支持UDP检测</font><br />"
-
-	retstring = retstring .. "<font color='green'>检测端口可用性</font><br />"
+	retstring = retstring .. "<font color='green'>检测端口连通性，不支持UDP检测</font><br />"
 	ucic:foreach(appname, "nodes", function(s)
 		local ret = ""
 		local tcp_socket
 		if (s.use_kcp and s.use_kcp == "1" and s.kcp_port) or (s.transport and s.transport == "mkcp" and s.port) then
 		else
 			local type = s.type
-			local protocol = s.protocol
-			if type and (protocol and protocol ~= "_balancing" and protocol ~= "_shunt") and
-				s.address and s.port and s.remarks then
+			if type and s.address and s.port and s.remarks then
 				node_name = "%s：[%s] %s:%s" % {s.type, s.remarks, s.address, s.port}
 				tcp_socket = nixio.socket("inet", "stream")
 				tcp_socket:setopt("socket", "rcvtimeo", 3)
@@ -340,15 +340,14 @@ function server_user_status()
 end
 
 function server_user_log()
-	local e = {}
 	local id = luci.http.formvalue("id")
 	if nixio.fs.access("/var/etc/passwall_server/" .. id .. ".log") then
-		e.code = 200
+		local content = luci.sys.exec("cat /var/etc/passwall_server/" .. id .. ".log")
+		content = content:gsub("\n", "<br />")
+		luci.http.write(content)
 	else
-		e.code = 400
+		luci.http.write(string.format("<script>alert('%s');window.close();</script>", i18n.translate("Not enabled log")))
 	end
-	e.data = luci.sys.exec("cat /var/etc/passwall_server/" .. id .. ".log")
-	http_write_json(e)
 end
 
 function server_get_log()
