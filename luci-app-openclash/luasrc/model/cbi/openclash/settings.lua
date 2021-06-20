@@ -34,6 +34,7 @@ s:tab("dashboard", translate("Dashboard Settings"))
 s:tab("rules_update", translate("Rules Update"))
 s:tab("geo_update", translate("GEOIP Update"))
 s:tab("chnr_update", translate("Chnroute Update"))
+s:tab("auto_restart", translate("Auto Restart"))
 s:tab("version_update", translate("Version Update"))
 s:tab("debug", translate("Debug Logs"))
 
@@ -54,13 +55,13 @@ o.default = "fake-ip"
 end
 
 o = s:taboption("op_mode", Flag, "enable_udp_proxy", font_red..bold_on..translate("Proxy UDP Traffics")..bold_off..font_off)
-o.description = translate("Select Mode For UDP Traffics, The Servers Must Support UDP while Choose Proxy")
+o.description = translate("The Servers Must Support UDP forwarding")..", "..font_red..bold_on..translate("If Docker is Installed, UDP May Not Forward Normally")..bold_off..font_off
 o:depends("en_mode", "redir-host")
 o:depends("en_mode", "fake-ip")
 o.default=1
 
 o = s:taboption("op_mode", ListValue, "stack_type", translate("Select Stack Type"))
-o.description = translate("Select Stack Type For Tun Mode, According To The Running Speed on Your Machine")
+o.description = translate("Select Stack Type For TUN Mode, According To The Running Speed on Your Machine")
 o:depends("en_mode", "redir-host-tun")
 o:depends("en_mode", "fake-ip-tun")
 o:depends("en_mode", "redir-host-mix")
@@ -76,6 +77,10 @@ o:value("global", translate("Global Proxy Mode"))
 o:value("direct", translate("Direct Proxy Mode"))
 o:value("script", translate("Script Proxy Mode (Tun Core Only)"))
 o.default = "rule"
+
+o = s:taboption("op_mode", Flag, "disable_udp_quic", font_red..bold_on..translate("Disable QUIC")..bold_off..font_off)
+o.description = translate("Prevent YouTube and Others To Use QUIC Transmission")..", "..font_red..bold_on..translate("REJECT UDP Traffic On Port 443")..bold_off..font_off
+o.default=1
 
 o = s:taboption("op_mode", Flag, "enable_rule_proxy", font_red..bold_on..translate("Rule Match Proxy Mode")..bold_off..font_off)
 o.description = translate("Only Proxy Rules Match, Prevent BT/P2P Passing")
@@ -143,9 +148,20 @@ o:value("debug", translate("Debug Mode"))
 o:value("silent", translate("Silent Mode"))
 o.default = "silent"
 
+o = s:taboption("settings", Value, "log_size", translate("Log Size (KB)"))
+o.description = translate("Set Log File Size (KB)")
+o.default=1024
+
 o = s:taboption("settings", Flag, "intranet_allowed", translate("Only intranet allowed"))
 o.description = translate("When Enabled, The Control Panel And The Connection Broker Port Will Not Be Accessible From The Public Network")
 o.default=0
+
+o = s:taboption("settings", Value, "dns_port")
+o.title = translate("DNS Port")
+o.default = 7874
+o.datatype = "port"
+o.rmempty = false
+o.description = translate("Please Make Sure Ports Available")
 
 o = s:taboption("settings", Value, "proxy_port")
 o.title = translate("Redir Port")
@@ -220,7 +236,6 @@ function custom_fake_black.cfgvalue(self, section)
 	return NXFS.readfile("/etc/openclash/custom/openclash_custom_fake_filter.list") or ""
 end
 function custom_fake_black.write(self, section, value)
-
 	if value then
 		value = value:gsub("\r\n?", "\n")
 		local old_value = NXFS.readfile("/etc/openclash/custom/openclash_custom_fake_filter.list")
@@ -248,12 +263,31 @@ function custom_domain_dns.cfgvalue(self, section)
 	return NXFS.readfile("/etc/openclash/custom/openclash_custom_domain_dns.list") or ""
 end
 function custom_domain_dns.write(self, section, value)
-
 	if value then
 		value = value:gsub("\r\n?", "\n")
 		local old_value = NXFS.readfile("/etc/openclash/custom/openclash_custom_domain_dns.list")
 	  if value ~= old_value then
 			NXFS.writefile("/etc/openclash/custom/openclash_custom_domain_dns.list", value)
+		end
+	end
+end
+
+custom_domain_dns_policy = s:taboption("dns", Value, "custom_domain_dns_core")
+custom_domain_dns_policy.template = "cbi/tvalue"
+custom_domain_dns_policy.description = translate("Domain Names In The List Use The Custom DNS Server, But Still Return Fake-IP Results, One rule per line")
+custom_domain_dns_policy.rows = 20
+custom_domain_dns_policy.wrap = "off"
+custom_domain_dns_policy:depends("dns_advanced_setting", "1")
+
+function custom_domain_dns_policy.cfgvalue(self, section)
+	return NXFS.readfile("/etc/openclash/custom/openclash_custom_domain_dns_policy.list") or ""
+end
+function custom_domain_dns_policy.write(self, section, value)
+	if value then
+		value = value:gsub("\r\n?", "\n")
+		local old_value = NXFS.readfile("/etc/openclash/custom/openclash_custom_domain_dns_policy.list")
+	  if value ~= old_value then
+			NXFS.writefile("/etc/openclash/custom/openclash_custom_domain_dns_policy.list", value)
 		end
 	end
 end
@@ -469,6 +503,27 @@ o.write = function()
 end
 end
 
+o = s:taboption("auto_restart", Flag, "auto_restart", translate("Auto Restart"))
+o.description = translate("Auto Restart OpenClash")
+o.default=0
+
+o = s:taboption("auto_restart", ListValue, "auto_restart_week_time", translate("Restart Time (Every Week)"))
+o:value("*", translate("Every Day"))
+o:value("1", translate("Every Monday"))
+o:value("2", translate("Every Tuesday"))
+o:value("3", translate("Every Wednesday"))
+o:value("4", translate("Every Thursday"))
+o:value("5", translate("Every Friday"))
+o:value("6", translate("Every Saturday"))
+o:value("0", translate("Every Sunday"))
+o.default=1
+
+o = s:taboption("auto_restart", ListValue, "auto_restart_day_time", translate("Restart time (every day)"))
+for t = 0,23 do
+o:value(t, t..":00")
+end
+o.default=0
+
 ---- Dashboard Settings
 local lan_ip=SYS.exec("uci get network.lan.ipaddr 2>/dev/null |awk -F '/' '{print $1}' 2>/dev/null |tr -d '\n'")
 local cn_port=SYS.exec("uci get openclash.config.cn_port 2>/dev/null |tr -d '\n'")
@@ -593,6 +648,11 @@ function o.cfgvalue(...)
 	end
 end
 
+o = ss:option(DummyValue, "Note", translate("Note"))
+function o.cfgvalue(...)
+	return Value.cfgvalue(...) or translate("None")
+end
+
 -- [[ Edit Authentication ]] --
 s = m:section(TypedSection, "authentication", translate("Set Authentication of SOCKS5/HTTP(S)"))
 s.anonymous = true
@@ -649,14 +709,14 @@ local t = {
 
 a = m:section(Table, t)
 
-o = a:option(Button, "Commit") 
+o = a:option(Button, "Commit", " ")
 o.inputtitle = translate("Commit Configurations")
 o.inputstyle = "apply"
 o.write = function()
   m.uci:commit("openclash")
 end
 
-o = a:option(Button, "Apply")
+o = a:option(Button, "Apply", " ")
 o.inputtitle = translate("Apply Configurations")
 o.inputstyle = "apply"
 o.write = function()

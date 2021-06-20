@@ -20,7 +20,7 @@
   </a>
   
   <a href="https://github.com/jerrykuku/luci-app-vssr/releases">
-    <img src="https://img.shields.io/badge/release-v1.21-blue.svg?">
+    <img src="https://img.shields.io/badge/release-v1.22-blue.svg?">
   </a>
   
   <a href="https://github.com/jerrykuku/luci-app-vssr/releases">
@@ -38,10 +38,8 @@
 目前Lean最新版本的openwrt 已经可以直接拉取源码到 package/lean 下直接进行勾选并编译。  
 
 
-### 更新日志 2021-01-14  v1.21
-- UPDATE：优化部分代码。
-- UPDATE：Socks5 部分增加 HTTP 代理 方便不走代理的设备如nas，在使用docker时 需要使用tg推送消息的问题。
-- UPDATE：优化了当订阅出错时的信息提示。
+### 更新日志 2021-03-22  v1.22-1
+- FIX: 修复Vless 链接无法导入的问题（由于目前链接样本依然不够，如果可能请在issues里向我提供更多的样本）。
 
 
 详情见[具体日志](./relnotes.txt)。 

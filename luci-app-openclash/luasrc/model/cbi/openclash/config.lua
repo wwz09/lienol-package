@@ -59,7 +59,7 @@ function config_check(CONFIG_FILE)
 	   return "File Not Exist"
 	end
 end
-    
+
 ful = SimpleForm("upload", translate("Config Manage"), nil)
 ful.reset = false
 ful.submit = false
@@ -86,7 +86,7 @@ HTTP.setfilehandler(
 		local fp = HTTP.formvalue("file_type")
 		if not fd then
 			if not meta then return end
-			
+
 			if fp == "config" then
 				if meta and chunk then fd = nixio.open(dir .. meta.file, "w") end
 			elseif fp == "proxy-provider" then
@@ -172,7 +172,7 @@ e[t].check=translate(config_check(CONFIG_FILE))
 e[t].remove=0
 end
 end
-    
+
 form=SimpleForm("config_file_list",translate("Config File List"))
 form.reset=false
 form.submit=false
@@ -204,7 +204,7 @@ uci:commit("openclash")
 HTTP.redirect(luci.dispatcher.build_url("admin", "services", "openclash", "config"))
 end
 
-btndl = tb:option(Button,"download",translate("Download Configurations")) 
+btndl = tb:option(Button,"download",translate("Download Config"))
 btndl.template="openclash/other_button"
 btndl.render=function(e,t,a)
 e.inputstyle="remove"
@@ -213,6 +213,44 @@ end
 btndl.write = function (a,t)
 	local sPath, sFile, fd, block
 	sPath = "/etc/openclash/config/"..e[t].name
+	sFile = NXFS.basename(sPath)
+	if fs.isdirectory(sPath) then
+		fd = io.popen('tar -C "%s" -cz .' % {sPath}, "r")
+		sFile = sFile .. ".tar.gz"
+	else
+		fd = nixio.open(sPath, "r")
+	end
+	if not fd then
+		return
+	end
+	HTTP.header('Content-Disposition', 'attachment; filename="%s"' % {sFile})
+	HTTP.prepare_content("application/octet-stream")
+	while true do
+		block = fd:read(nixio.const.buffersize)
+		if (not block) or (#block ==0) then
+			break
+		else
+			HTTP.write(block)
+		end
+	end
+	fd:close()
+	HTTP.close()
+end
+
+btndlr = tb:option(Button,"download_run",translate("Download Running Config"))
+btndlr.template="openclash/other_button"
+btndlr.render=function(c,t,a)
+	if string.sub(SYS.exec("uci get openclash.config.config_path 2>/dev/null"), 23, -2) == e[t].name then
+		a.display=""
+	else
+		a.display="none"
+	end
+c.inputstyle="remove"
+Button.render(c,t,a)
+end
+btndlr.write = function (a,t)
+	local sPath, sFile, fd, block
+	sPath = "/etc/openclash/"..e[t].name
 	sFile = NXFS.basename(sPath)
 	if fs.isdirectory(sPath) then
 		fd = io.popen('tar -C "%s" -cz .' % {sPath}, "r")
@@ -263,14 +301,14 @@ local provider_manage = {
 
 promg = p:section(Table, provider_manage)
 
-o = promg:option(Button, "proxy_mg")
+o = promg:option(Button, "proxy_mg", " ")
 o.inputtitle = translate("Proxy Provider File List")
 o.inputstyle = "reload"
 o.write = function()
   HTTP.redirect(DISP.build_url("admin", "services", "openclash", "proxy-provider-file-manage"))
 end
 
-o = promg:option(Button, "rule_mg")
+o = promg:option(Button, "rule_mg", " ")
 o.inputtitle = translate("Rule Providers File List")
 o.inputstyle = "reload"
 o.write = function()
@@ -338,7 +376,7 @@ local t = {
 
 a = m:section(Table, t)
 
-o = a:option(Button, "Commit") 
+o = a:option(Button, "Commit", " ")
 o.inputtitle = translate("Commit Configurations")
 o.inputstyle = "apply"
 o.write = function()
@@ -346,7 +384,7 @@ o.write = function()
   uci:commit("openclash")
 end
 
-o = a:option(Button, "Apply")
+o = a:option(Button, "Apply", " ")
 o.inputtitle = translate("Apply Configurations")
 o.inputstyle = "apply"
 o.write = function()

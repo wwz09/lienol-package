@@ -1,5 +1,6 @@
 <%
-local xray_version = require "luci.model.cbi.passwall.api.api".get_xray_version()
+local api = require "luci.model.cbi.passwall.api.api"
+local xray_version = api.get_xray_version()
 -%>
 
 <script type="text/javascript">
@@ -72,7 +73,7 @@ local xray_version = require "luci.model.cbi.passwall.api.api".get_xray_version(
 
 		var ckeckDetailElm = document.getElementById(btn.id + '-detail');
 
-		XHR.get('<%=url([[admin]], [[services]], [[passwall]], [[xray_check]])%>', {
+		XHR.get('<%=api.url("xray_check")%>', {
 			token: tokenStr,
 			arch: ''
 		}, function(x,json) {
@@ -91,12 +92,12 @@ local xray_version = require "luci.model.cbi.passwall.api.api".get_xray_version(
 					if(ckeckDetailElm) {
 						var urlNode = '';
 						if(json.version) {
-							urlNode = '<em style="color:red;">最新版本号：' + json.version + '</em>';
+							urlNode = '<em style="color:red;">' + json.version + '</em>';
 							if(json.url && json.url.html) {
 								urlNode = '<a href="' + json.url.html + '" target="_blank">' + urlNode + '</a>';
 							}
 						}
-					ckeckDetailElm.innerHTML = urlNode;
+						ckeckDetailElm.innerHTML = urlNode;
 					}
 				} else {
 					btn.disabled = true;
@@ -112,7 +113,7 @@ local xray_version = require "luci.model.cbi.passwall.api.api".get_xray_version(
 
 		addPageNotice_xray();
 
-		var xrayUpdateUrl = '<%=url([[admin]], [[services]], [[passwall]], [[xray_update]])%>';
+		var xrayUpdateUrl = '<%=api.url("xray_update")%>';
 		// Download file
 		XHR.get(xrayUpdateUrl, {
 			token: tokenStr,
@@ -164,8 +165,8 @@ local xray_version = require "luci.model.cbi.passwall.api.api".get_xray_version(
 	</label>
 	<div class="cbi-value-field">
 		<div class="cbi-value-description">
-			<span>【 <%=xray_version%> 】</span>
-			<input class="cbi-button cbi-input-apply" type="button" id="_xray-check_btn" onclick="onBtnClick_xray(this);" value="<%:Manually update%>" />
+			<span>【 <%=xray_version ~= "" and xray_version or translate("Null") %> 】</span>
+			<input class="btn cbi-button cbi-button-apply" type="button" id="_xray-check_btn" onclick="onBtnClick_xray(this);" value="<%:Manually update%>" />
 			<span id="_xray-check_btn-detail"></span>
 		</div>
 	</div>

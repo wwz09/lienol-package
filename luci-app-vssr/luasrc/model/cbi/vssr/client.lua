@@ -62,7 +62,7 @@ local route_label = {
 }
 
 -- [[ Global Setting ]]--
-s = m:section(TypedSection, 'global', translate('Basic Settings [SS|SSR|V2ray|Xray|Trojan]'))
+s = m:section(TypedSection, 'global', translate('Basic Settings [SS|SSR|Xray|Trojan]'))
 s.anonymous = true
 
 o = s:option(ListValue, 'global_server', translate('Main Server'))
@@ -79,11 +79,6 @@ o:value('same', translate('Same as Main Server'))
 for _, key in pairs(server_table) do
     o:value(key.name, key.gname)
 end
-if nixio.fs.access('/usr/bin/xray') or nixio.fs.access('/usr/bin/xray/xray') then
-    o = s:option(Flag, 'use_xray', translate('Use Xray instead of V2ray'))
-    o.rmempty = false
-end
-
 
 o = s:option(Flag, 'v2ray_flow', translate('Open v2ray route'))
 o.rmempty = false
@@ -93,15 +88,7 @@ for i, v in pairs(route_name) do
     o = s:option(ListValue, v, translate(route_label[i]))
     o:value('nil', translate('Same as Main Server'))
     for _, key in pairs(server_table) do
-        if(v == 'tw_video_server' and key.flag == "tw") then
-            o:value(key.name, key.gname)
-        end
-        if(v == 'tvb_server' and key.flag == "hk") then
-            o:value(key.name, key.gname)
-        end
-        if(v ~= 'tvb_server' and v ~= 'tw_video_server') then
-            o:value(key.name, key.gname)
-        end
+        o:value(key.name, key.gname)
     end
     o:depends('v2ray_flow', '1')
     o.default = 'nil'

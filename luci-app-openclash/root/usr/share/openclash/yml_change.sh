@@ -4,39 +4,40 @@
 LOG_FILE="/tmp/openclash.log"
 START_LOG="/tmp/openclash_start.log"
 LOGTIME=$(date "+%Y-%m-%d %H:%M:%S")
+dns_advanced_setting=$(uci -q get openclash.config.dns_advanced_setting)
 
-if [ "$14" != "1" ]; then
+if [ "${14}" != "1" ]; then
    controller_address="0.0.0.0"
    bind_address="*"
 else
-   controller_address=$11
-   bind_address=$11
+   controller_address=${11}
+   bind_address=${11}
 fi
 
 if [ -n "$(ruby_read "$7" "['tun']")" ]; then
    if [ -n "$(ruby_read "$7" "['tun']['device-url']")" ]; then
-      if [ "$15" -eq 1 ] || [ "$15" -eq 3 ]; then
+      if [ "${15}" -eq 1 ] || [ "${15}" -eq 3 ]; then
          uci set openclash.config.config_reload=0
       fi
    else
       uci set openclash.config.config_reload=0
    fi
 else
-   if [ -n "$15" ]; then
+   if [ -n "${15}" ]; then
       uci set openclash.config.config_reload=0
    fi
 fi
 
-if [ -z "$15" ]; then
+if [ -z "${15}" ]; then
    en_mode_tun=0
 else
-   en_mode_tun=$15
+   en_mode_tun=${15}
 fi
 
-if [ -z "$16" ]; then
+if [ -z "${16}" ]; then
    stack_type=system
 else
-   stack_type=$16
+   stack_type=${16}
 fi
 
 if [ "$(ruby_read "$7" "['external-controller']")" != "$controller_address:$5" ]; then
@@ -62,20 +63,20 @@ ruby -ryaml -E UTF-8 -e "
 begin
    Value = YAML.load_file('$7');
 rescue Exception => e
-puts '${LOGTIME} Load File Error: ' + e.message
+   puts '${LOGTIME} Load File Error: ' + e.message
 end
 begin
-Value['redir-port']=$6;
-Value['port']=$9;
-Value['socks-port']=$10;
-Value['mixed-port']=$19;
-Value['mode']='$13';
-Value['log-level']='$12';
-Value['allow-lan']=true;
-Value['external-controller']='$controller_address:$5';
-Value['secret']='$4';
-Value['bind-address']='$bind_address';
-Value['external-ui']='/usr/share/openclash/dashboard';
+   Value['redir-port']=$6;
+   Value['port']=$9;
+   Value['socks-port']=${10};
+   Value['mixed-port']=${19};
+   Value['mode']='${13}';
+   Value['log-level']='${12}';
+   Value['allow-lan']=true;
+   Value['external-controller']='$controller_address:$5';
+   Value['secret']='$4';
+   Value['bind-address']='$bind_address';
+   Value['external-ui']='/usr/share/openclash/dashboard';
 if not Value.key?('dns') then
    Value_1={'dns'=>{'enable'=>true}}
    Value['dns']=Value_1['dns']
@@ -96,9 +97,9 @@ else
    Value['dns'].delete('fake-ip-range')
 end;
 if $8 != 1 then
-   Value['dns']['listen']='127.0.0.1:$17'
+   Value['dns']['listen']='127.0.0.1:${17}'
 else
-   Value['dns']['listen']='0.0.0.0:$17'
+   Value['dns']['listen']='0.0.0.0:${17}'
 end;
 Value_2={'tun'=>{'enable'=>true}};
 if $en_mode_tun == 1 or $en_mode_tun == 3 then
@@ -112,8 +113,14 @@ elsif $en_mode_tun == 2
    Value['tun']['dns-listen']='0.0.0.0:53'
 elsif $en_mode_tun == 0
    if Value.key?('tun') then
-      Value['tun'].clear
+      Value.delete('tun')
    end
+end;
+if not Value.key?('profile') then
+   Value_3={'profile'=>{'store-selected'=>true}}
+   Value['profile']=Value_3['profile']
+else
+   Value['profile']['store-selected']=true
 end;
 rescue Exception => e
 puts '${LOGTIME} Set General Error: ' + e.message
@@ -155,6 +162,24 @@ if '$2' == 'fake-ip' then
 end;
 rescue Exception => e
 puts '${LOGTIME} Set Fake IP Filter Error: ' + e.message
+end
+begin
+#nameserver-policy
+if '$dns_advanced_setting' == '1' then
+   if File::exist?('/etc/openclash/custom/openclash_custom_domain_dns_policy.list') then
+     Value_6 = YAML.load_file('/etc/openclash/custom/openclash_custom_domain_dns_policy.list')
+     if Value_6 != false then
+        if Value['dns'].has_key?('nameserver-policy') and not Value['dns']['nameserver-policy'].to_a.empty? then
+           Value['dns']['nameserver-policy'].merge!(Value_6)
+           Value['dns']['nameserver-policy'].uniq
+        else
+           Value['dns']['nameserver-policy']=Value_6
+        end
+     end
+  end
+end;
+rescue Exception => e
+puts '${LOGTIME} Set Nameserver-policy Error: ' + e.message
 ensure
 File.open('$7','w') {|f| YAML.dump(Value, f)}
 end" 2>/dev/null >> $LOG_FILE
